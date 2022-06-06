@@ -23,7 +23,7 @@ public:
 
 public:
     GT911();
-    esp_err_t begin(uint8_t pin_sda, uint8_t pin_scl, uint8_t pin_int, bool callbackOnTouch = true);
+    esp_err_t begin(uint8_t pin_sda, uint8_t pin_scl, uint8_t pin_int, bool callbackOnTouch = false);
     bool avaliable();
     void update();
     void SetRotation(uint16_t rotate);
