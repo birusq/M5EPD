@@ -11,6 +11,8 @@ typedef struct
     uint16_t size;
 }tp_finger_t;
 
+typedef std::function<void()> TouchCallbackFunction;
+
 class GT911
 {
 public:
@@ -21,7 +23,7 @@ public:
 
 public:
     GT911();
-    esp_err_t begin(uint8_t pin_sda, uint8_t pin_scl, uint8_t pin_int);
+    esp_err_t begin(uint8_t pin_sda, uint8_t pin_scl, uint8_t pin_int, bool callbackOnTouch = false);
     bool avaliable();
     void update();
     void SetRotation(uint16_t rotate);
@@ -33,6 +35,7 @@ public:
     uint8_t getFingerNum(void);
     bool isFingerUp(void);
     void flush(void);
+    void onTouch(const TouchCallbackFunction &cb);
 
 private:
     void write(uint16_t addr, uint8_t data);
@@ -44,6 +47,7 @@ private:
 
 private:
     bool _is_finger_up = false;
+    bool _callbackOnTouch = false;
     uint8_t _num = 0;
     uint8_t _rotate = ROTATE_0;
     tp_finger_t _fingers[2];
