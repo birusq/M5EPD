@@ -22,6 +22,11 @@ static const uint8_t _kGT911FW540960G2T1602729168[] = {
 
 GT911::GT911() {}
 
+const uint32_t TOUCH_TASK_STACK_DEPTH = 42;
+const UBaseType_t TOUCH_TASK_PRIORITY = 10;
+static TaskHandle_t xTouchTaskHandle = NULL;
+TouchCallbackFunction touchCb;
+
 volatile uint8_t gt911_irq_trigger = 0;
 void ICACHE_RAM_ATTR ___GT911IRQ___()
 {
@@ -30,10 +35,69 @@ void ICACHE_RAM_ATTR ___GT911IRQ___()
     interrupts();
 }
 
-esp_err_t GT911::begin(uint8_t pin_sda, uint8_t pin_scl, uint8_t pin_int)
+
+void ICACHE_RAM_ATTR vTouchISR() 
+{
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    vTaskNotifyGiveIndexedFromISR( xTouchTaskHandle, 0, &xHigherPriorityTaskWoken );
+
+    // Force context switch, if needed
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+}
+
+void vTouchHandlerTask(void* pvParameters)
+{
+    // TODO: portMAX_DELAY blocks indefinitely. In theory
+    // should timeout ocassionally to clear the queue in case of
+    // any error conditions. What value should we use?
+
+    for(;;) {
+        // Block until new notification from the interrupt
+        ulTaskNotifyTakeIndexed( 0, pdTRUE, portMAX_DELAY );
+        gt911_irq_trigger = 1;
+        // Callback that handles the touch event
+        touchCb();
+    }
+
+    // Should never get here, but if we do, make sure to exit cleanly
+    vTaskDelete(NULL);
+}
+
+esp_err_t createTouchHandlerTask() 
+{
+    BaseType_t taskCreateResult = xTaskCreate(
+        vTouchHandlerTask,
+        "TOUCH_HANDLER_TASK",
+        TOUCH_TASK_STACK_DEPTH,
+        ( void * ) 1, // Blank params for the task
+        TOUCH_TASK_PRIORITY,
+        &xTouchTaskHandle
+    );
+
+    return taskCreateResult == pdPASS 
+        ? ESP_OK
+        : ESP_FAIL;
+}
+
+void stopTouchHandlerTask() 
+{
+    if ( xTouchTaskHandle != NULL) {
+        vTaskDelete(xTouchTaskHandle);
+        xTouchTaskHandle = NULL;
+    }
+}
+
+
+void GT911::onTouch(const TouchCallbackFunction &cb) {
+    touchCb = cb;
+}
+
+esp_err_t GT911::begin(uint8_t pin_sda, uint8_t pin_scl, uint8_t pin_int, bool callbackOnTouch)
 {
     log_d("GT911: Initialization");
     pinMode(pin_int, INPUT); // Startup sequence PIN part
+
+    _callbackOnTouch = callbackOnTouch;
 
     Wire.begin((int) pin_sda, (int) pin_scl, (uint32_t) 100000U); // Note: SHT3x sensor built into M5Paper only seems to work with default 100kHz
     delay(100);
@@ -61,7 +125,15 @@ esp_err_t GT911::begin(uint8_t pin_sda, uint8_t pin_scl, uint8_t pin_int)
     //     delay(100);
     // }
 
-    attachInterrupt(pin_int, ___GT911IRQ___, FALLING);
+    if (!_callbackOnTouch)
+    {
+        attachInterrupt(pin_int, ___GT911IRQ___, FALLING);
+    }
+    else 
+    {
+        attachInterrupt(pin_int, vTouchISR, FALLING);
+        createTouchHandlerTask();
+    }
 
     return ESP_OK;
 }
