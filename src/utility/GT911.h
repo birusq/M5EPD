@@ -9,9 +9,9 @@ typedef struct
     uint16_t y;
     uint16_t id;
     uint16_t size;
-}tp_finger_t;
+} tp_finger_t;
 
-typedef std::function<void(tp_finger_t)> FingerDownCallbackFunction;
+typedef std::function<void(const tp_finger_t &)> FingerDownCallbackFunction;
 typedef std::function<void()> FingerUpCallbackFunction;
 
 class GT911
@@ -36,13 +36,11 @@ public:
     tp_finger_t _finger;
 
 private:
-
     void write(uint16_t addr, uint8_t data);
     void write(uint16_t addr, const uint8_t *data, uint16_t len);
     uint8_t read(uint16_t addr);
     void read(uint16_t addr, uint8_t *buf, uint16_t len);
     uint8_t calcChecksum(const uint8_t *buf, uint8_t len);
-
 
 private:
     uint8_t _rotate = ROTATE_0;
